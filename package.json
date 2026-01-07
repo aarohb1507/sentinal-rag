@@ -1,0 +1,26 @@
+{
+  "name": "sentinal-rag",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-grade RAG system with hybrid retrieval, reranking, and evaluation",
+  "scripts": {
+    "dev": "pnpm --parallel --filter './packages/**' dev",
+    "build": "pnpm --recursive --filter './packages/**' build",
+    "test": "pnpm --recursive --filter './packages/**' test",
+    "lint": "pnpm --recursive --filter './packages/**' lint",
+    "clean": "pnpm --recursive --filter './packages/**' clean && rm -rf node_modules",
+    "docker:up": "docker-compose -f infra/docker-compose.yml up -d",
+    "docker:down": "docker-compose -f infra/docker-compose.yml down",
+    "docker:logs": "docker-compose -f infra/docker-compose.yml logs -f"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3",
+    "prettier": "^3.1.1",
+    "eslint": "^8.56.0"
+  }
+}
