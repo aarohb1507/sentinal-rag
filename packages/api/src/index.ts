@@ -7,7 +7,7 @@ import { healthRoutes } from './routes/health';
 import { queryRoutes } from './routes/query';
 
 const fastify = Fastify({
-  logger: logger,
+  logger: true,
   requestIdLogLabel: 'reqId',
   disableRequestLogging: false,
   requestIdHeader: 'x-request-id',

@@ -16,7 +16,11 @@
     "composite": true,
     "incremental": true,
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "baseUrl": ".",
+    "paths": {
+      "@sentinal-rag/shared": ["packages/shared/src/index.ts"]
+    }
   },
   "exclude": ["node_modules", "dist", "build"]
 }

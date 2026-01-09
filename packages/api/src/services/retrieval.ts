@@ -21,6 +21,7 @@ export interface RetrievalResult {
   score: number;
   metadata: Record<string, any>;
   source: 'keyword' | 'vector' | 'hybrid';
+  relevanceScore?: number;
 }
 
 /**
