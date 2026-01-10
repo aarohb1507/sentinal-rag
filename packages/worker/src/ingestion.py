@@ -19,6 +19,7 @@ from redis.asyncio import Redis
 import json
 from config import db_config, redis_config, openai_config
 from chunking import chunk_document, Chunk
+from cache_utils import CacheKeyManager
 
 
 class IngestionPipeline:
@@ -58,9 +59,10 @@ class IngestionPipeline:
         
         Uses OpenAI text-embedding-3-small (1536 dimensions).
         Caches results in Redis to avoid redundant API calls.
+        Uses SHA256-based cache keys for consistency.
         """
-        # Check cache first
-        cache_key = f"embed:{hash(text)}"
+        # Check cache first using proper key generation
+        cache_key = CacheKeyManager.generate_embedding_key(text)
         if self.redis_client:
             cached = await self.redis_client.get(cache_key)
             if cached:
@@ -114,30 +116,90 @@ class IngestionPipeline:
             )
             await self.db_conn.commit()
     
+    async def invalidate_document_cache(self, document_id: str) -> int:
+        """
+        Invalidate all cached embeddings for a document.
+        
+        When a document is updated, we need to clear its cached embeddings.
+        This queries Redis for all keys matching the document pattern.
+        
+        Args:
+            document_id: The unique identifier of the document
+            
+        Returns:
+            Number of cache entries deleted
+        """
+        if not self.redis_client:
+            return 0
+        
+        # Find all chunk embedding keys for this document
+        pattern = CacheKeyManager.DOCUMENT_PREFIX + f"{document_id}:chunk:*"
+        cursor = 0
+        deleted_count = 0
+        
+        # Use SCAN to iterate over matching keys (avoids blocking)
+        while True:
+            cursor, keys = await self.redis_client.scan(cursor, match=pattern, count=100)
+            if keys:
+                deleted_count += await self.redis_client.delete(*keys)
+            if cursor == 0:
+                break
+        
+        return deleted_count
+    
     async def ingest_document(
         self,
         text: str,
         metadata: Dict[str, Any],
-        chunking_strategy: str = "semantic"
+        chunking_strategy: str = "semantic",
+        document_id: str | None = None,
     ) -> Dict[str, Any]:
         """
         Main ingestion entry point.
         
         Steps:
-        1. Chunk document
-        2. Generate embeddings for each chunk
-        3. Store in database with keyword + vector indices
+        1. If document_id provided and exists, invalidate old cache
+        2. Chunk document
+        3. Generate embeddings for each chunk
+        4. Store in database with keyword + vector indices
+        5. Track chunk embeddings in Redis for future invalidation
         
-        Returns ingestion statistics.
+        Args:
+            text: Document text to ingest
+            metadata: Document metadata
+            chunking_strategy: "fixed" or "semantic" chunking
+            document_id: Optional document ID for cache tracking and updates
+        
+        Returns:
+            Ingestion statistics including cache invalidation info
         """
-        # Step 1: Chunking
+        cache_invalidated = 0
+        
+        # Step 1: Invalidate old cache if document is being updated
+        if document_id:
+            cache_invalidated = await self.invalidate_document_cache(document_id)
+        
+        # Step 2: Chunking
         chunks = chunk_document(text, metadata, strategy=chunking_strategy)  # type: ignore
         
-        # Step 2 & 3: Generate embeddings and store
+        # Step 3 & 4 & 5: Generate embeddings and store
         tasks = []
-        for chunk in chunks:
+        for chunk_index, chunk in enumerate(chunks):
             embedding = await self.generate_embedding(chunk.content)
             tasks.append(self.store_chunk(chunk, embedding))
+            
+            # Track document chunk for cache invalidation
+            if document_id and self.redis_client:
+                chunk_cache_key = CacheKeyManager.generate_embedding_for_document_key(
+                    document_id, chunk_index
+                )
+                # Store reference to the embedding cache key
+                embed_key = CacheKeyManager.generate_embedding_key(chunk.content)
+                await self.redis_client.setex(
+                    chunk_cache_key,
+                    86400,  # 24 hours
+                    embed_key,  # Store the embedding key for quick deletion
+                )
         
         await asyncio.gather(*tasks)
         
@@ -146,4 +208,6 @@ class IngestionPipeline:
             "chunks_created": len(chunks),
             "total_tokens": sum(c.token_count for c in chunks),
             "chunking_strategy": chunking_strategy,
+            "document_id": document_id,
+            "cache_entries_invalidated": cache_invalidated,
         }

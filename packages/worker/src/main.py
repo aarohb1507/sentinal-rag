@@ -48,6 +48,7 @@ class IngestRequest(BaseModel):
     text: str
     metadata: Dict[str, Any] = {}
     chunking_strategy: Literal["fixed", "semantic"] = "semantic"
+    document_id: str | None = None  # For tracking and cache invalidation
 
 
 class HealthResponse(BaseModel):
@@ -68,16 +69,61 @@ async def health_check():
     )
 
 
+@app.get("/cache/stats")
+async def get_cache_stats():
+    """
+    Get cache statistics for monitoring.
+    
+    Returns:
+    - Total embedding cache keys
+    - Total cache size in bytes
+    """
+    if not pipeline or not pipeline.redis_client:
+        raise HTTPException(status_code=503, detail="Cache not initialized")
+    
+    try:
+        from cache_utils import CacheKeyManager
+        
+        cursor = 0
+        total_keys = 0
+        total_size = 0
+        
+        pattern = f"{CacheKeyManager.EMBEDDING_PREFIX}*"
+        while True:
+            cursor, keys = await pipeline.redis_client.scan(
+                cursor, match=pattern, count=100
+            )
+            total_keys += len(keys)
+            for key in keys:
+                size = await pipeline.redis_client.memory_usage(key)
+                if size:
+                    total_size += size
+            if cursor == 0:
+                break
+        
+        return {
+            "status": "ok",
+            "total_embedding_cache_keys": total_keys,
+            "total_cache_size_bytes": total_size,
+        }
+    except Exception as e:
+        logger.error(f"Failed to get cache stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/ingest")
 async def ingest_document(request: IngestRequest):
     """
     Ingest a document into the RAG system.
     
     Pipeline:
-    1. Chunk document (fixed or semantic)
-    2. Generate embeddings
-    3. Store in PostgreSQL + pgvector + tsvector
-    4. Cache embeddings in Redis
+    1. If document_id provided and exists, invalidate old cache
+    2. Chunk document (fixed or semantic)
+    3. Generate embeddings
+    4. Store in PostgreSQL + pgvector + tsvector
+    5. Cache embeddings in Redis
+    
+    Returns ingestion statistics with cache invalidation info.
     """
     if not pipeline:
         raise HTTPException(status_code=503, detail="Pipeline not initialized")
@@ -87,6 +133,7 @@ async def ingest_document(request: IngestRequest):
             text=request.text,
             metadata=request.metadata,
             chunking_strategy=request.chunking_strategy,
+            document_id=request.document_id,  # Pass document_id for cache tracking
         )
         return result
     except Exception as e:
