@@ -31,13 +31,14 @@ class RedisConfig(BaseSettings):
 
 
 class OpenAIConfig(BaseSettings):
-    """OpenAI API configuration."""
+    """Embeddings configuration (now using local sentence-transformers)."""
     
-    api_key: str = ""
-    embedding_model: str = "text-embedding-3-small"
-    embedding_dimensions: int = 1536
+    # Local embeddings model
+    embedding_model: str = "all-MiniLM-L6-v2"  # Hugging Face model name
+    embedding_dimensions: int = 384  # Output dimension for all-MiniLM-L6-v2
     
-    model_config = SettingsConfigDict(env_prefix="OPENAI_")
+    # Note: GROQ_API_KEY moved to API service only
+    # Worker never needs LLM calls
 
 
 class ChunkingConfig(BaseSettings):
@@ -73,6 +74,6 @@ class WorkerConfig(BaseSettings):
 # Global config instances
 db_config = DatabaseConfig()
 redis_config = RedisConfig()
-openai_config = OpenAIConfig()
+embeddings_config = OpenAIConfig()  # Renamed for clarity (it's local, not OpenAI now)
 chunking_config = ChunkingConfig()
 worker_config = WorkerConfig()

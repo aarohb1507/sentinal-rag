@@ -1,5 +1,4 @@
-import OpenAI from 'openai';
-import { config } from '../config';
+import { llm } from '../utils/llm';
 import { logger } from '../utils/logger';
 import type { RetrievalResult } from './retrieval';
 
@@ -18,12 +17,12 @@ import type { RetrievalResult } from './retrieval';
  * - Improves answer relevance
  * - Lower token cost (fewer chunks to synthesis)
  * 
- * Trade-off: Adds 300-500ms latency
+ * MVP Optimization:
+ * - BATCH SCORING: Group chunks into batches
+ * - Before: 1 LLM call per chunk (20-30 calls)
+ * - After: ~4-6 calls total (80% reduction)
+ * - Uses Groq for fast, cheap inference
  */
-
-const openai = new OpenAI({
-  apiKey: config.openai.apiKey,
-});
 
 export interface RankedResult extends RetrievalResult {
   relevanceScore: number;
@@ -31,6 +30,11 @@ export interface RankedResult extends RetrievalResult {
 
 /**
  * Rerank chunks by relevance to query.
+ * 
+ * BATCH OPTIMIZATION:
+ * - Groups chunks (e.g., 5 per batch)
+ * - Scores all chunks in batch with single LLM call
+ * - Reduces from 30 calls → ~6 calls
  * 
  * @param query - User query
  * @param chunks - Retrieved chunks from hybrid search
@@ -45,12 +49,21 @@ export async function rerankChunks(
   const startTime = Date.now();
 
   try {
-    // Score each chunk in parallel
-    const scoringPromises = chunks.map((chunk) =>
-      scoreChunkRelevance(query, chunk)
+    // Batch size for scoring (balance between API calls and context length)
+    const batchSize = 5;
+    const batches = [];
+
+    for (let i = 0; i < chunks.length; i += batchSize) {
+      batches.push(chunks.slice(i, i + batchSize));
+    }
+
+    // Score each batch
+    const scoredChunksPerBatch = await Promise.all(
+      batches.map((batch) => scoreChunkBatch(query, batch))
     );
 
-    const scoredChunks = await Promise.all(scoringPromises);
+    // Flatten results
+    const scoredChunks = scoredChunksPerBatch.flat();
 
     // Sort by relevance score and take top-K
     const ranked = scoredChunks
@@ -59,8 +72,8 @@ export async function rerankChunks(
 
     const latency = Date.now() - startTime;
     logger.info(
-      { latency, inputCount: chunks.length, outputCount: ranked.length },
-      'Reranking completed'
+      { latency, inputCount: chunks.length, batchCount: batches.length, outputCount: ranked.length },
+      'Batch reranking completed'
     );
 
     return ranked;
@@ -71,43 +84,62 @@ export async function rerankChunks(
 }
 
 /**
- * Score a single chunk for relevance using LLM.
+ * Score a batch of chunks in a single LLM call.
  * 
- * Prompt strategy: Ask LLM to score 0-1 based on relevance.
+ * Prompt groups multiple chunks and asks for JSON scores.
+ * This reduces API calls from 30 to ~6.
  */
-async function scoreChunkRelevance(
+async function scoreChunkBatch(
   query: string,
-  chunk: RetrievalResult
-): Promise<RankedResult> {
+  chunks: RetrievalResult[]
+): Promise<RankedResult[]> {
   try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo', // Fast, cheap model for scoring
-      messages: [
-        {
-          role: 'system',
-          content: `You are a relevance scoring system. Given a query and a text chunk, score how relevant the chunk is to answering the query. Respond with ONLY a number between 0.0 (not relevant) and 1.0 (highly relevant).`,
-        },
-        {
-          role: 'user',
-          content: `Query: ${query}\n\nChunk: ${chunk.content}\n\nRelevance score (0.0-1.0):`,
-        },
-      ],
+    // Build batch prompt
+    const chunksText = chunks
+      .map(
+        (chunk, idx) =>
+          `[Chunk ${idx + 1}] ${chunk.content.substring(0, 200)}...`
+      )
+      .join('\n\n');
+
+    const prompt = `You are a relevance scoring system. Given a query and text chunks, score each chunk's relevance to the query (0.0-1.0).
+
+Respond with ONLY a JSON array of numbers (one score per chunk):
+[score1, score2, ...]
+
+Query: ${query}
+
+Chunks:
+${chunksText}
+
+Scores:`;
+
+    const responseText = await llm.generate(prompt, {
       temperature: 0,
-      max_tokens: 10,
+      maxTokens: 100,
     });
 
-    const scoreText = response.choices[0]?.message?.content?.trim() || '0';
-    const relevanceScore = Math.max(0, Math.min(1, parseFloat(scoreText) || 0));
+    // Parse JSON array of scores
+    const scoresMatch = responseText.match(/\[[\d\s.,]+\]/);
+    if (!scoresMatch) {
+      logger.warn({ responseText }, 'Failed to parse scores, using defaults');
+      return chunks.map((chunk, idx) => ({
+        ...chunk,
+        relevanceScore: 1 - idx * 0.1, // Default: descending
+      }));
+    }
 
-    return {
+    const scores = JSON.parse(scoresMatch[0]) as number[];
+
+    return chunks.map((chunk, idx) => ({
       ...chunk,
-      relevanceScore,
-    };
+      relevanceScore: Math.max(0, Math.min(1, scores[idx] || 0)),
+    }));
   } catch (error) {
-    logger.warn({ error, chunkId: chunk.chunkId }, 'Failed to score chunk, defaulting to 0');
-    return {
+    logger.warn({ error }, 'Batch scoring failed, using default scores');
+    return chunks.map((chunk, idx) => ({
       ...chunk,
-      relevanceScore: 0,
-    };
+      relevanceScore: 1 - idx * 0.1,
+    }));
   }
 }

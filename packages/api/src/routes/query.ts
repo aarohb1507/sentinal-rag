@@ -138,11 +138,20 @@ export const queryRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // ===== STAGE 5: BUILD RESPONSE & STORE METRICS =====
+      
+      // Build full source objects with content, score, metadata
+      const sources = rerankedChunks.map((chunk) => ({
+        chunkId: chunk.chunkId,
+        content: chunk.content,
+        score: chunk.relevanceScore ?? 0,
+        metadata: chunk.metadata || {},
+      }));
+      
       const response = {
         requestId,
         query,
         answer: synthesisResult.answer,
-        sources: synthesisResult.sourceChunkIds,
+        sources,
         refusalReason: synthesisResult.refusalReason || undefined,
         metadata: {
           latency: {

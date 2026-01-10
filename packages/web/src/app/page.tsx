@@ -31,6 +31,11 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<QueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // PDF upload state
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,6 +71,51 @@ export default function Home() {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      setUploadError('Only PDF files are supported');
+      return;
+    }
+
+    setUploadLoading(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('metadata', JSON.stringify({
+        uploaded_at: new Date().toISOString(),
+        original_filename: file.name,
+      }));
+      formData.append('chunking_strategy', 'semantic');
+
+      const res = await fetch('http://localhost:8000/ingest-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || 'Upload failed');
+      }
+
+      const data = await res.json();
+      setUploadSuccess(`✅ Successfully ingested: ${data.chunks_created} chunks created from "${file.name}"`);
+      
+      // Reset file input
+      e.target.value = '';
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
   return (
     <main className={styles.main}>
       <div className={styles.container}>
@@ -73,6 +123,30 @@ export default function Home() {
           <h1>SentinelRAG</h1>
           <p>Production-grade RAG with inspectable retrieval</p>
         </header>
+
+        {/* PDF Upload Section */}
+        <section className={styles.uploadSection}>
+          <h2>📄 Upload PDF Document</h2>
+          <div className={styles.uploadContainer}>
+            <label htmlFor="pdf-upload" className={styles.uploadButton}>
+              {uploadLoading ? 'Uploading...' : 'Choose PDF File'}
+            </label>
+            <input
+              id="pdf-upload"
+              type="file"
+              accept=".pdf"
+              onChange={handleFileUpload}
+              disabled={uploadLoading}
+              className={styles.fileInput}
+            />
+          </div>
+          {uploadSuccess && (
+            <div className={styles.uploadSuccess}>{uploadSuccess}</div>
+          )}
+          {uploadError && (
+            <div className={styles.uploadError}>{uploadError}</div>
+          )}
+        </section>
 
         <form onSubmit={handleSubmit} className={styles.queryForm}>
           <input

@@ -3,8 +3,9 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy workspace files
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml tsconfig.json ./
 COPY packages/web/package.json ./packages/web/
+COPY packages/web/tsconfig.json ./packages/web/
 
 # Install dependencies
 RUN npm install -g pnpm
@@ -24,11 +25,11 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Copy built assets
-COPY --from=builder /app/packages/web/.next ./.next
-COPY --from=builder /app/packages/web/public ./public
-COPY --from=builder /app/packages/web/package.json ./
-COPY --from=builder /app/packages/web/next.config.js ./
+# Copy production dependencies lock file and config
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY --from=builder /app/packages/web/package.json ./packages/web/
+COPY --from=builder /app/packages/web/.next ./packages/web/.next
+COPY --from=builder /app/packages/web/next.config.js ./packages/web/
 
 # Install production dependencies
 RUN npm install -g pnpm
@@ -36,4 +37,4 @@ RUN pnpm install --prod --frozen-lockfile
 
 EXPOSE 3001
 
-CMD ["pnpm", "start"]
+CMD ["pnpm", "--filter", "@sentinal-rag/web", "start"]

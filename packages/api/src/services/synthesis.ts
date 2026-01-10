@@ -1,5 +1,4 @@
-import OpenAI from 'openai';
-import { config } from '../config';
+import { llm } from '../utils/llm';
 import { logger } from '../utils/logger';
 import type { RankedResult } from './reranking';
 
@@ -18,11 +17,12 @@ import type { RankedResult } from './reranking';
  * - Correctness > fluency
  * - Explicit failure > silent hallucination
  * - Debuggability (trace answer to source)
+ * 
+ * LLM: Groq (mixtral-8x7b-32768)
+ * - Fast inference
+ * - Free-tier available
+ * - Perfect for MVP answer synthesis
  */
-
-const openai = new OpenAI({
-  apiKey: config.openai.apiKey,
-});
 
 export interface SynthesisResult {
   answer: string;
@@ -49,20 +49,13 @@ export async function synthesizeAnswer(
       .map((chunk, idx) => `[${idx + 1}] ${chunk.content}`)
       .join('\n\n');
 
-    const systemPrompt = buildSystemPrompt();
     const userPrompt = buildUserPrompt(query, context);
 
-    const response = await openai.chat.completions.create({
-      model: config.openai.model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.1, // Low temperature for consistency
-      max_tokens: 500,
+    // Use Groq LLM for fast, cheap inference
+    const answer = await llm.generate(userPrompt, {
+      temperature: 0,
+      maxTokens: 500,
     });
-
-    const answer = response.choices[0]?.message?.content?.trim() || '';
 
     // Check if system refused to answer
     const isRefusal = checkIfRefusal(answer);
@@ -87,31 +80,24 @@ export async function synthesizeAnswer(
 }
 
 /**
- * System prompt enforcing strict grounding.
- */
-function buildSystemPrompt(): string {
-  return `You are a precise question-answering system. Your job is to answer questions using ONLY the provided context.
-
-STRICT RULES:
-1. Answer ONLY using information from the provided context
-2. If the context does not contain enough information to answer, respond with: "I don't have enough information to answer this question."
-3. Do NOT use external knowledge or make assumptions
-4. Cite which context sections you used (e.g., "According to [1]...")
-5. Be concise but complete
-
-Your goal is CORRECTNESS, not fluency. If unsure, refuse to answer.`;
-}
-
-/**
  * User prompt with query and context.
+ * No system prompt needed with Groq direct instruction.
  */
 function buildUserPrompt(query: string, context: string): string {
-  return `Context:
+  return `You are a precise question-answering system. Answer using ONLY the provided context.
+
+RULES:
+1. Answer ONLY from the context below
+2. If insufficient context, respond: "I don't have enough information to answer this question."
+3. Do NOT use external knowledge
+4. Be concise but complete
+
+Context:
 ${context}
 
 Question: ${query}
 
-Answer (using ONLY the context above):`;
+Answer:`;
 }
 
 /**

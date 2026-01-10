@@ -25,11 +25,16 @@ export const config = {
     password: process.env.REDIS_PASSWORD,
   },
 
-  // OpenAI
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY || '',
-    model: process.env.OPENAI_MODEL || 'gpt-4-turbo-preview',
-    embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
+  // Groq (LLM Provider for MVP)
+  groq: {
+    apiKey: process.env.GROQ_API_KEY || '',
+    model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+  },
+
+  // Embeddings (Local - sentence-transformers)
+  embeddings: {
+    model: process.env.EMBEDDINGS_MODEL || 'all-MiniLM-L6-v2',
+    dimension: 384, // all-MiniLM-L6-v2 output dimension
   },
 
   // RAG Configuration

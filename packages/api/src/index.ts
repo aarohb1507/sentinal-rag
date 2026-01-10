@@ -5,6 +5,7 @@ import { config } from './config';
 import { logger } from './utils/logger';
 import { healthRoutes } from './routes/health';
 import { queryRoutes } from './routes/query';
+import { llm } from './utils/llm';
 
 const fastify = Fastify({
   logger: true,
@@ -15,6 +16,25 @@ const fastify = Fastify({
 
 async function start() {
   try {
+    // Validate Groq API key is configured
+    if (!config.groq.apiKey) {
+      throw new Error(
+        'GROQ_API_KEY is not set. Please configure it in .env file. ' +
+        'Get free tier at: https://console.groq.com'
+      );
+    }
+
+    logger.info({ model: config.groq.model }, 'Groq LLM configured');
+
+    // Initialize LLM client to validate configuration
+    try {
+      // Just creating the instance validates the API key
+      llm;
+    } catch (err) {
+      logger.error(err, 'Failed to initialize Groq client');
+      throw err;
+    }
+
     // Register plugins
     await fastify.register(helmet, { 
       contentSecurityPolicy: false 

@@ -15,12 +15,14 @@
     "sourceMap": true,
     "composite": true,
     "incremental": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
     "baseUrl": ".",
     "paths": {
-      "@sentinal-rag/shared": ["packages/shared/src/index.ts"]
+      "@sentinal-rag/shared": ["packages/shared/src/index.ts"],
+      "@sentinal-rag/api": ["packages/api/src/index.ts"],
+      "@sentinal-rag/web": ["packages/web/src/index.ts"]
     }
   },
-  "exclude": ["node_modules", "dist", "build"]
+  "exclude": ["node_modules", "dist", "build", ".next"],
+  "files": []
 }
+

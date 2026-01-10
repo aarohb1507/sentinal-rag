@@ -103,14 +103,17 @@ async function vectorSearch(
   queryEmbedding: number[],
   topK: number
 ): Promise<RetrievalResult[]> {
+  // Format embedding as PostgreSQL array literal for pgvector
+  const vectorString = `[${queryEmbedding.join(',')}]`;
+  
   const results = await sql`
     SELECT 
       id::text as chunk_id,
       content,
-      1 - (embedding <=> ${sql.json(queryEmbedding)}::vector) as score,
+      1 - (embedding <=> ${vectorString}::vector) as score,
       metadata
     FROM chunks
-    ORDER BY embedding <=> ${sql.json(queryEmbedding)}::vector
+    ORDER BY embedding <=> ${vectorString}::vector
     LIMIT ${topK}
   `;
 

@@ -1,21 +1,30 @@
-import OpenAI from 'openai';
 import { getCachedEmbedding, cacheEmbedding } from './redis';
-import { EMBEDDING_CONFIG } from '@sentinal-rag/shared';
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+import { logger } from './logger';
+import { config } from '../config';
 
 /**
- * Generate embedding for a text string
+ * Embeddings Utility (API Service)
+ * 
+ * Uses local sentence-transformers model: all-MiniLM-L6-v2
+ * Output dimension: 384
+ * 
+ * Why:
+ * - Free (no API costs)
+ * - Fast (CPU inference)
+ * - Good quality (production-grade)
+ * 
+ * CRITICAL: Must use same model as worker (document embeddings)
  * 
  * Strategy:
  * 1. Check Redis cache first (24h TTL) → Cost: $0
- * 2. If miss → Call OpenAI API → Cost: $0.0001 per 1K tokens
+ * 2. If miss → Call embedding service
  * 3. Store result in Redis for future hits
+ */
+
+/**
+ * Generate embedding for a text string (query or document).
  * 
- * Optimization: Normalizes query to catch minor variations
- * e.g., "What is RAG?" == "what is rag?"
+ * Caching optimizes repeated queries.
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   // Normalize query (lowercase + trim) for better cache hits
@@ -27,14 +36,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     return cached;
   }
 
-  // Cache miss → Call OpenAI
-  const response = await openai.embeddings.create({
-    model: EMBEDDING_CONFIG.MODEL,
-    input: text,
-    encoding_format: 'float',
-  });
-
-  const embedding = response.data[0].embedding;
+  // Cache miss → Call embedding service
+  const embedding = await callEmbeddingService(text);
 
   // Store in Redis for future hits (24h TTL)
   await cacheEmbedding(normalizedText, embedding);
@@ -43,17 +46,39 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Batch generate embeddings (for future use)
- * Useful for ingestion pipeline: convert multiple chunks at once
+ * Batch generate embeddings.
  */
 export async function generateEmbeddingsBatch(texts: string[]): Promise<number[][]> {
-  const response = await openai.embeddings.create({
-    model: EMBEDDING_CONFIG.MODEL,
-    input: texts,
-    encoding_format: 'float',
-  });
+  const embeddings = await Promise.all(texts.map((text) => generateEmbedding(text)));
+  return embeddings;
+}
 
-  return response.data
-    .sort((a, b) => a.index - b.index)
-    .map((item) => item.embedding);
+/**
+ * Call embedding service (sentence-transformers).
+ * 
+ * In MVP deployment:
+ * - Python worker provides embedding endpoint at http://worker:8001/embed
+ * - Or run as separate service
+ * 
+ * Expected response: { embedding: number[] }
+ */
+async function callEmbeddingService(text: string): Promise<number[]> {
+  try {
+    // Call embedding service (assumes running locally or via docker)
+    const response = await fetch('http://localhost:8000/embed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, model: config.embeddings.model }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Embedding service returned ${response.status}`);
+    }
+
+    const data = (await response.json()) as { embedding: number[] };
+    return data.embedding;
+  } catch (error) {
+    logger.error({ error }, 'Embedding service call failed');
+    throw error;
+  }
 }

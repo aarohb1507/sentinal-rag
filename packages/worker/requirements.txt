@@ -1,14 +1,32 @@
-openai>=1.10.0
-psycopg[binary]>=3.1.0
-pgvector>=0.2.4
-redis>=5.0.0
-python-dotenv>=1.0.0
+# Core dependencies
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
 pydantic>=2.5.0
 pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+python-multipart>=0.0.6
+
+# Database
+psycopg[binary]>=3.1.0
+pgvector>=0.2.4
+
+# Cache
+redis>=5.0.0
+
+# Embeddings (LOCAL - sentence-transformers)
 sentence-transformers>=2.3.0
+torch>=2.0.0
+
+# PDF Processing
+pypdf>=4.0.0
+
+# Utilities
 numpy>=1.26.0
 tiktoken>=0.5.0
+
+# Optional: For future evaluation metrics
 langchain-community>=0.0.10
 ragas>=0.1.0
+
+# Note: GROQ is NOT here (moved to API package)
+# Note: OPENAI is NOT here (using local embeddings now)
