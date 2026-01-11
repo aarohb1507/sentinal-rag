@@ -17,7 +17,18 @@ import { logger } from './logger';
 
 // Support both connection string (REDIS_URL) and individual config
 const redisConfig = process.env.REDIS_URL 
-  ? process.env.REDIS_URL 
+  ? {
+      url: process.env.REDIS_URL,
+      retryStrategy: (times: number) => {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      },
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: false,
+      enableOfflineQueue: true,
+      connectTimeout: 10000,
+      keepAlive: 30000,
+    }
   : {
       host: config.redis.host,
       port: config.redis.port,
@@ -27,6 +38,10 @@ const redisConfig = process.env.REDIS_URL
         return delay;
       },
       maxRetriesPerRequest: 3,
+      enableReadyCheck: false,
+      enableOfflineQueue: true,
+      connectTimeout: 10000,
+      keepAlive: 30000,
     };
 
 const redis = new Redis(redisConfig);
