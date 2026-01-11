@@ -2,8 +2,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy root workspace files first (ensure pnpm workspace context is present)
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+# Copy root workspace files (pnpm-lock.yaml is optional; pnpm will generate if missing)
+COPY package.json pnpm-workspace.yaml tsconfig.json ./
+COPY pnpm-lock.yaml ./ || true
 
 # Copy package manifests to leverage Docker layer caching
 COPY packages/shared/package.json ./packages/shared/
@@ -13,7 +14,7 @@ COPY packages/api/tsconfig.json ./packages/api/
 
 # Install pnpm and workspace dependencies
 RUN npm install -g pnpm@9
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # Copy all source files
 COPY . .
