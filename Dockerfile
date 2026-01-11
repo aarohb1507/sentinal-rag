@@ -15,8 +15,9 @@ COPY packages/api/tsconfig.json ./packages/api/
 RUN npm install -g pnpm@9
 RUN pnpm install
 
-# Copy all source files
-COPY . .
+# Copy source files explicitly
+COPY packages/shared/src ./packages/shared/src
+COPY packages/api/src ./packages/api/src
 
 # Build shared first, then API
 RUN pnpm --filter @sentinal-rag/shared build
