@@ -27,10 +27,12 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy the package manifests so pnpm can install production deps
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/api/package.json ./packages/api/
+# Copy package manifests from the builder stage so final stage doesn't require context files
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-lock.yaml ./
+COPY --from=builder /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/
+COPY --from=builder /app/packages/api/package.json ./packages/api/
 
 RUN npm install -g pnpm@9
 RUN pnpm install --prod --frozen-lockfile
