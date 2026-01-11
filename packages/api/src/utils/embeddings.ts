@@ -64,8 +64,9 @@ export async function generateEmbeddingsBatch(texts: string[]): Promise<number[]
  */
 async function callEmbeddingService(text: string): Promise<number[]> {
   try {
-    // Call embedding service (assumes running locally or via docker)
-    const response = await fetch('http://localhost:8000/embed', {
+    // Call worker embedding service
+    const url = `${config.embeddings.workerUrl}/embed`;
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, model: config.embeddings.model }),

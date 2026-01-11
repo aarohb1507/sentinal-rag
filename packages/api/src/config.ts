@@ -31,8 +31,9 @@ export const config = {
     model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
   },
 
-  // Embeddings (Local - sentence-transformers)
+  // Embeddings (via Worker - sentence-transformers)
   embeddings: {
+    workerUrl: process.env.WORKER_URL || 'http://localhost:8000',
     model: process.env.EMBEDDINGS_MODEL || 'all-MiniLM-L6-v2',
     dimension: 384, // all-MiniLM-L6-v2 output dimension
   },
