@@ -15,16 +15,21 @@ import { logger } from './logger';
  * - TTL support (auto-expire old entries)
  */
 
-const redis = new Redis({
-  host: config.redis.host,
-  port: config.redis.port,
-  password: config.redis.password,
-  retryStrategy: (times) => {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
-  },
-  maxRetriesPerRequest: 3,
-});
+// Support both connection string (REDIS_URL) and individual config
+const redisConfig = process.env.REDIS_URL 
+  ? process.env.REDIS_URL 
+  : {
+      host: config.redis.host,
+      port: config.redis.port,
+      password: config.redis.password,
+      retryStrategy: (times: number) => {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      },
+      maxRetriesPerRequest: 3,
+    };
+
+const redis = new Redis(redisConfig);
 
 redis.on('error', (err) => {
   logger.error({ err }, 'Redis connection error');
