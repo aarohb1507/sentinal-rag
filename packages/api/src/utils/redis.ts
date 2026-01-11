@@ -24,10 +24,7 @@ const redisConfig = process.env.REDIS_URL
         return delay;
       },
       maxRetriesPerRequest: 3,
-      enableReadyCheck: false,
-      enableOfflineQueue: true,
       connectTimeout: 10000,
-      keepAlive: 30000,
     }
   : {
       host: config.redis.host,
@@ -38,6 +35,8 @@ const redisConfig = process.env.REDIS_URL
         return delay;
       },
       maxRetriesPerRequest: 3,
+      connectTimeout: 10000,
+    };
       enableReadyCheck: false,
       enableOfflineQueue: true,
       connectTimeout: 10000,
