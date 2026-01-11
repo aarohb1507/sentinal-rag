@@ -15,10 +15,11 @@ import { logger } from './logger';
  * - TTL support (auto-expire old entries)
  */
 
-// Support both connection string (REDIS_URL) and individual config
-const redisConfig = process.env.REDIS_URL 
+// Use REDIS_URL if available (Railway), otherwise use individual config
+const redisUrl = process.env.REDIS_URL;
+const redisConfig = redisUrl
   ? {
-      url: process.env.REDIS_URL,
+      url: redisUrl,
       retryStrategy: (times: number) => {
         const delay = Math.min(times * 50, 2000);
         return delay;
@@ -37,6 +38,8 @@ const redisConfig = process.env.REDIS_URL
       maxRetriesPerRequest: 3,
       connectTimeout: 10000,
     };
+
+logger.info({ redisUrl: !!redisUrl, host: redisConfig.host }, 'Initializing Redis connection');
 
 const redis = new Redis(redisConfig);
 
