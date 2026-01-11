@@ -2,9 +2,8 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy root workspace files (pnpm-lock.yaml is optional; pnpm will generate if missing)
+# Copy root workspace files
 COPY package.json pnpm-workspace.yaml tsconfig.json ./
-COPY pnpm-lock.yaml ./ || true
 
 # Copy package manifests to leverage Docker layer caching
 COPY packages/shared/package.json ./packages/shared/
