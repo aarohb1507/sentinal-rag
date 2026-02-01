@@ -36,12 +36,13 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/api/package.json ./packages/api/
 
-# Install pnpm and production dependencies only
+# Install pnpm and production dependencies
 RUN npm install -g pnpm@9
-RUN pnpm install --prod --frozen-lockfile
+RUN pnpm install --prod --frozen-lockfile --filter @sentinal-rag/api --filter @sentinal-rag/shared
 
 # Copy built files from builder
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/
 COPY --from=builder /app/packages/api/dist ./packages/api/dist
 
 # Expose port
