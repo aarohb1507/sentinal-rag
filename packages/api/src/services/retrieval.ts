@@ -28,22 +28,24 @@ export interface RetrievalResult {
  * Perform hybrid retrieval: keyword + vector search.
  * 
  * @param query - User query text
- * @param queryEmbedding - Query embedding vector (1536 dimensions)
+ * @param queryEmbedding - Query embedding vector (384 dimensions)
  * @param topK - Number of results to return
+ * @param documentId - Optional document ID to filter results
  * @returns Merged and ranked results
  */
 export async function hybridRetrieval(
   query: string,
   queryEmbedding: number[],
-  topK: number = 30
+  topK: number = 30,
+  documentId?: string
 ): Promise<RetrievalResult[]> {
   const startTime = Date.now();
 
   try {
     // Run keyword and vector searches in parallel
     const [keywordResults, vectorResults] = await Promise.all([
-      keywordSearch(query, topK),
-      vectorSearch(queryEmbedding, topK),
+      keywordSearch(query, topK, documentId),
+      vectorSearch(queryEmbedding, topK, documentId),
     ]);
 
     // Merge and deduplicate
@@ -55,7 +57,7 @@ export async function hybridRetrieval(
       .slice(0, topK);
 
     const latency = Date.now() - startTime;
-    logger.info({ latency, resultsCount: ranked.length }, 'Hybrid retrieval completed');
+    logger.info({ latency, resultsCount: ranked.length, documentId }, 'Hybrid retrieval completed');
 
     return ranked;
   } catch (error) {
@@ -71,19 +73,39 @@ export async function hybridRetrieval(
  */
 async function keywordSearch(
   query: string,
-  topK: number
+  topK: number,
+  documentId?: string
 ): Promise<RetrievalResult[]> {
-  const results = await sql`
-    SELECT 
-      id::text as chunk_id,
-      content,
-      ts_rank_cd(search_vector, plainto_tsquery('english', ${query})) as score,
-      metadata
-    FROM chunks
-    WHERE search_vector @@ plainto_tsquery('english', ${query})
-    ORDER BY score DESC
-    LIMIT ${topK}
-  `;
+  let results;
+  
+  if (documentId) {
+    // Filter by specific document
+    results = await sql`
+      SELECT 
+        id::text as chunk_id,
+        content,
+        ts_rank_cd(search_vector, plainto_tsquery('english', ${query})) as score,
+        metadata
+      FROM chunks
+      WHERE search_vector @@ plainto_tsquery('english', ${query})
+        AND document_id = ${documentId}
+      ORDER BY score DESC
+      LIMIT ${topK}
+    `;
+  } else {
+    // Search all documents
+    results = await sql`
+      SELECT 
+        id::text as chunk_id,
+        content,
+        ts_rank_cd(search_vector, plainto_tsquery('english', ${query})) as score,
+        metadata
+      FROM chunks
+      WHERE search_vector @@ plainto_tsquery('english', ${query})
+      ORDER BY score DESC
+      LIMIT ${topK}
+    `;
+  }
 
   return results.map((row: any) => ({
     chunkId: row.chunk_id,
@@ -101,21 +123,40 @@ async function keywordSearch(
  */
 async function vectorSearch(
   queryEmbedding: number[],
-  topK: number
+  topK: number,
+  documentId?: string
 ): Promise<RetrievalResult[]> {
   // Format embedding as PostgreSQL array literal for pgvector
   const vectorString = `[${queryEmbedding.join(',')}]`;
   
-  const results = await sql`
-    SELECT 
-      id::text as chunk_id,
-      content,
-      1 - (embedding <=> ${vectorString}::vector) as score,
-      metadata
-    FROM chunks
-    ORDER BY embedding <=> ${vectorString}::vector
-    LIMIT ${topK}
-  `;
+  let results;
+  
+  if (documentId) {
+    // Filter by specific document
+    results = await sql`
+      SELECT 
+        id::text as chunk_id,
+        content,
+        1 - (embedding <=> ${vectorString}::vector) as score,
+        metadata
+      FROM chunks
+      WHERE document_id = ${documentId}
+      ORDER BY embedding <=> ${vectorString}::vector
+      LIMIT ${topK}
+    `;
+  } else {
+    // Search all documents
+    results = await sql`
+      SELECT 
+        id::text as chunk_id,
+        content,
+        1 - (embedding <=> ${vectorString}::vector) as score,
+        metadata
+      FROM chunks
+      ORDER BY embedding <=> ${vectorString}::vector
+      LIMIT ${topK}
+    `;
+  }
 
   return results.map((row: any) => ({
     chunkId: row.chunk_id,

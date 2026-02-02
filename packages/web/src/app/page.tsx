@@ -1,7 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import styles from './page.module.css';
+
+interface Document {
+  id: string;
+  filename: string;
+  file_type: string;
+  total_pages: number;
+  total_chunks: number;
+  status: string;
+  created_at: string;
+}
 
 interface QueryResponse {
   requestId: string;
@@ -26,6 +36,10 @@ interface QueryResponse {
   };
 }
 
+// Worker URL for direct access (PDF upload, documents)
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:8000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
+
 export default function Home() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,6 +50,31 @@ export default function Home() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  
+  // Document management state
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string>('');
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
+
+  // Fetch documents on mount and after changes
+  const fetchDocuments = useCallback(async () => {
+    try {
+      const res = await fetch(`${WORKER_URL}/documents`);
+      if (res.ok) {
+        const data = await res.json();
+        setDocuments(data.documents || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch documents:', err);
+    } finally {
+      setDocumentsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDocuments();
+  }, [fetchDocuments]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +84,7 @@ export default function Home() {
     setError(null);
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/v1/query`, {
+      const res = await fetch(`${API_URL}/api/v1/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -54,6 +93,7 @@ export default function Home() {
           query,
           options: {
             includeDebug: true,
+            documentId: selectedDocumentId || undefined, // Filter by selected document
           },
         }),
       });
@@ -94,7 +134,7 @@ export default function Home() {
       }));
       formData.append('chunking_strategy', 'semantic');
 
-      const res = await fetch('http://localhost:8000/ingest-pdf', {
+      const res = await fetch(`${WORKER_URL}/ingest-pdf`, {
         method: 'POST',
         body: formData,
       });
@@ -107,12 +147,46 @@ export default function Home() {
       const data = await res.json();
       setUploadSuccess(`✅ Successfully ingested: ${data.chunks_created} chunks created from "${file.name}"`);
       
+      // Refresh documents list
+      await fetchDocuments();
+      
       // Reset file input
       e.target.value = '';
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploadLoading(false);
+    }
+  };
+
+  const handleDeleteDocument = async (documentId: string, filename: string) => {
+    if (!confirm(`Are you sure you want to delete "${filename}"? This will remove all its chunks.`)) {
+      return;
+    }
+
+    setDeleteLoading(documentId);
+    
+    try {
+      const res = await fetch(`${WORKER_URL}/documents/${encodeURIComponent(documentId)}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to delete document');
+      }
+
+      // If deleted document was selected, clear selection
+      if (selectedDocumentId === documentId) {
+        setSelectedDocumentId('');
+      }
+
+      // Refresh documents list
+      await fetchDocuments();
+    } catch (err) {
+      console.error('Failed to delete document:', err);
+      alert('Failed to delete document. Please try again.');
+    } finally {
+      setDeleteLoading(null);
     }
   };
 
@@ -148,6 +222,60 @@ export default function Home() {
           )}
         </section>
 
+        {/* Documents List Section */}
+        <section className={styles.documentsSection}>
+          <h2>📚 Your Documents</h2>
+          {documentsLoading ? (
+            <p className={styles.documentsLoading}>Loading documents...</p>
+          ) : documents.length === 0 ? (
+            <p className={styles.documentsEmpty}>No documents uploaded yet. Upload a PDF to get started!</p>
+          ) : (
+            <>
+              <div className={styles.documentsList}>
+                {documents.map((doc) => (
+                  <div 
+                    key={doc.id} 
+                    className={`${styles.documentItem} ${selectedDocumentId === doc.id ? styles.documentItemSelected : ''}`}
+                  >
+                    <div 
+                      className={styles.documentInfo}
+                      onClick={() => setSelectedDocumentId(selectedDocumentId === doc.id ? '' : doc.id)}
+                    >
+                      <input
+                        type="radio"
+                        name="selectedDoc"
+                        checked={selectedDocumentId === doc.id}
+                        onChange={() => setSelectedDocumentId(selectedDocumentId === doc.id ? '' : doc.id)}
+                        className={styles.documentRadio}
+                      />
+                      <div className={styles.documentDetails}>
+                        <span className={styles.documentName}>{doc.filename}</span>
+                        <span className={styles.documentMeta}>
+                          {doc.total_chunks} chunks • {doc.total_pages} page{doc.total_pages !== 1 ? 's' : ''} • {new Date(doc.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      className={styles.deleteButton}
+                      onClick={() => handleDeleteDocument(doc.id, doc.filename)}
+                      disabled={deleteLoading === doc.id}
+                      title="Delete document"
+                    >
+                      {deleteLoading === doc.id ? '...' : '🗑️'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className={styles.contextHint}>
+                {selectedDocumentId 
+                  ? `🔍 Searching in: "${documents.find(d => d.id === selectedDocumentId)?.filename}"`
+                  : '🔍 Searching in: All documents'}
+              </p>
+            </>
+          )}
+        </section>
+
+        {/* Query Form */}
         <form onSubmit={handleSubmit} className={styles.queryForm}>
           <input
             type="text"

@@ -12,6 +12,7 @@ const QueryRequestSchema = z.object({
   options: z.object({
     topK: z.number().int().positive().optional(),
     includeDebug: z.boolean().optional(),
+    documentId: z.string().optional(), // Filter to specific document
   }).optional(),
 });
 
@@ -63,7 +64,7 @@ export const queryRoutes: FastifyPluginAsync = async (fastify) => {
       const retrievalStartTime = Date.now();
       let retrievedChunks;
       try {
-        retrievedChunks = await hybridRetrieval(query, queryEmbedding, options?.topK);
+        retrievedChunks = await hybridRetrieval(query, queryEmbedding, options?.topK, options?.documentId);
       } catch (error) {
         fastify.log.error({ requestId, error }, 'Retrieval failed');
         return reply.code(503).send({

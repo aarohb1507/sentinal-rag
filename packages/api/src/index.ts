@@ -5,6 +5,7 @@ import { config } from './config';
 import { logger } from './utils/logger';
 import { healthRoutes } from './routes/health';
 import { queryRoutes } from './routes/query';
+import { documentRoutes } from './routes/documents';
 import { llm } from './utils/llm';
 
 const fastify = Fastify({
@@ -48,6 +49,7 @@ async function start() {
     // Register routes
     await fastify.register(healthRoutes, { prefix: '/health' });
     await fastify.register(queryRoutes, { prefix: '/api/v1/query' });
+    await fastify.register(documentRoutes, { prefix: '/api/v1/documents' });
 
     // Start server
     await fastify.listen({

@@ -100,6 +100,58 @@ async def health_check():
     )
 
 
+# ==================== Document Management Endpoints ====================
+
+@app.get("/documents")
+async def list_documents():
+    """
+    List all uploaded documents.
+    
+    Returns list of documents with metadata, chunk counts, and upload dates.
+    """
+    if not pipeline:
+        raise HTTPException(status_code=503, detail="Pipeline not initialized")
+    
+    try:
+        documents = await pipeline.list_documents()
+        return {
+            "status": "ok",
+            "documents": documents,
+            "total": len(documents),
+        }
+    except Exception as e:
+        logger.error(f"Failed to list documents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/documents/{document_id}")
+async def delete_document(document_id: str):
+    """
+    Delete a document and all its chunks.
+    
+    Also invalidates any cached embeddings for this document.
+    """
+    if not pipeline:
+        raise HTTPException(status_code=503, detail="Pipeline not initialized")
+    
+    try:
+        result = await pipeline.delete_document(document_id)
+        if not result["document_deleted"]:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return {
+            "status": "success",
+            "message": f"Document '{document_id}' deleted",
+            **result,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete document: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Cache Endpoints ====================
+
 @app.get("/cache/stats")
 async def get_cache_stats():
     """
