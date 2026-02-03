@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS chunks (
     id SERIAL PRIMARY KEY,
     content TEXT NOT NULL,
-    embedding vector(1536),  -- OpenAI text-embedding-3-small dimensions
+    embedding vector(384),  -- all-MiniLM-L6-v2 dimensions (local sentence-transformers)
     search_vector tsvector,   -- Full-text search vector
     metadata JSONB,
     chunk_type VARCHAR(50) NOT NULL,
