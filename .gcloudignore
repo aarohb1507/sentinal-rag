@@ -1,0 +1,41 @@
+# Ignore everything except what's needed for the worker build
+.git/
+.gitignore
+.env
+.env.*
+*.md
+
+# Node.js
+node_modules/
+packages/api/node_modules/
+packages/web/node_modules/
+packages/shared/node_modules/
+pnpm-lock.yaml
+package-lock.json
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Build outputs
+dist/
+build/
+.next/
+
+# Other packages not needed for worker
+packages/api/dist/
+packages/web/.next/
+packages/web/out/
+
+# Scripts and docs
+scripts/
+docs/
+infra/
