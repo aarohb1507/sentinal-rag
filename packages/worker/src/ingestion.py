@@ -52,9 +52,17 @@ class IngestionPipeline:
         )
         
         # PostgreSQL with pgvector
-        self.db_conn = await psycopg.AsyncConnection.connect(
-            f"postgresql://{db_config.user}:{db_config.password}@{db_config.host}:{db_config.port}/{db_config.database}"
-        )
+        # Handle Cloud SQL Unix socket connections (DB_HOST starts with /cloudsql/)
+        if db_config.host.startswith("/"):
+            # Unix socket connection for Cloud SQL
+            self.db_conn = await psycopg.AsyncConnection.connect(
+                f"postgresql://{db_config.user}:{db_config.password}@/{db_config.database}?host={db_config.host}"
+            )
+        else:
+            # Standard TCP connection
+            self.db_conn = await psycopg.AsyncConnection.connect(
+                f"postgresql://{db_config.user}:{db_config.password}@{db_config.host}:{db_config.port}/{db_config.database}"
+            )
         # Register pgvector types - handle both sync and async versions
         try:
             result = register_vector(self.db_conn)
