@@ -1,11 +1,17 @@
 steps:
-  # Build the container image
+  # Build the container image from repo root
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/sentinal-api:$COMMIT_SHA', '-f', 'Dockerfile', '.']
+    args: 
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/sentinal-api:$BUILD_ID'
+      - '-f'
+      - 'packages/api/Dockerfile'
+      - '.'
   
   # Push the container image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/sentinal-api:$COMMIT_SHA']
+    args: ['push', 'gcr.io/$PROJECT_ID/sentinal-api:$BUILD_ID']
   
   # Deploy to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -15,7 +21,7 @@ steps:
       - 'deploy'
       - 'sentinal-api'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/sentinal-api:$COMMIT_SHA'
+      - 'gcr.io/$PROJECT_ID/sentinal-api:$BUILD_ID'
       - '--region'
       - 'asia-south1'
       - '--platform'
@@ -26,7 +32,15 @@ steps:
       - '--cpu'
       - '1'
       - '--max-instances'
-      - '10'
+      - '5'
+      - '--min-instances'
+      - '0'
+      - '--set-env-vars'
+      - 'NODE_ENV=production'
+      - '--add-cloudsql-instances'
+      - '$PROJECT_ID:asia-south1:sentinal-postgres'
 
 images:
-  - 'gcr.io/$PROJECT_ID/sentinal-api:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/sentinal-api:$BUILD_ID'
+
+timeout: '1200s'
