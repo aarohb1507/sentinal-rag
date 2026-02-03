@@ -8,7 +8,7 @@ COPY packages/web/package.json ./packages/web/
 COPY packages/web/tsconfig.json ./packages/web/
 
 # Install dependencies
-RUN npm install -g pnpm
+RUN npm install -g pnpm@9
 RUN pnpm install --frozen-lockfile
 
 # Copy source
@@ -24,15 +24,17 @@ FROM node:20-alpine
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV PORT=3001
 
 # Copy production dependencies lock file and config
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY --from=builder /app/packages/web/package.json ./packages/web/
+COPY packages/web/package.json ./packages/web/
 COPY --from=builder /app/packages/web/.next ./packages/web/.next
 COPY --from=builder /app/packages/web/next.config.js ./packages/web/
+COPY --from=builder /app/packages/web/public ./packages/web/public 2>/dev/null || true
 
 # Install production dependencies
-RUN npm install -g pnpm
+RUN npm install -g pnpm@9
 RUN pnpm install --prod --frozen-lockfile
 
 EXPOSE 3001
