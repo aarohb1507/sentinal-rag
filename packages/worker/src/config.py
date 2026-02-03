@@ -61,7 +61,7 @@ class WorkerConfig(BaseSettings):
     
     env: Literal["development", "production"] = "development"
     host: str = "0.0.0.0"
-    port: int = 8000
+    port: int = 8000  # Default, but will check PORT env at runtime
     log_level: str = "INFO"
     
     # Background job configuration
@@ -69,6 +69,10 @@ class WorkerConfig(BaseSettings):
     batch_size: int = 10
     
     model_config = SettingsConfigDict(env_prefix="WORKER_")
+    
+    def get_port(self) -> int:
+        """Get port, preferring PORT env var (Cloud Run) over WORKER_PORT."""
+        return int(os.environ.get("PORT", str(self.port)))
 
 
 # Global config instances

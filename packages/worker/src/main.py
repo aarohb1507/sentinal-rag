@@ -337,6 +337,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app",
         host=worker_config.host,
-        port=worker_config.port,
+        port=worker_config.get_port(),
         reload=worker_config.env == "development",
     )
