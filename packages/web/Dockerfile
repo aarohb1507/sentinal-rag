@@ -16,6 +16,12 @@ COPY packages/web ./packages/web
 
 # Build
 WORKDIR /app/packages/web
+
+ARG NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_WORKER_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_WORKER_URL=$NEXT_PUBLIC_WORKER_URL
+
 RUN pnpm build
 
 # Production stage

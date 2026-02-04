@@ -63,6 +63,9 @@ class IngestionPipeline:
             self.db_conn = await psycopg.AsyncConnection.connect(
                 f"postgresql://{db_config.user}:{db_config.password}@{db_config.host}:{db_config.port}/{db_config.database}"
             )
+        # Initialize schema
+        await self._init_schema()
+
         # Register pgvector types - handle both sync and async versions
         try:
             result = register_vector(self.db_conn)
@@ -71,6 +74,70 @@ class IngestionPipeline:
         except Exception as e:
             logger.warning(f"pgvector registration warning (may be ok): {e}")
     
+    async def _init_schema(self) -> None:
+        """Initialize database schema."""
+        if not self.db_conn:
+            return
+            
+        async with self.db_conn.cursor() as cur:
+            # Enable pgvector extension
+            await cur.execute("CREATE EXTENSION IF NOT EXISTS vector")
+            
+            # Create documents table
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS documents (
+                    id TEXT PRIMARY KEY,
+                    filename TEXT,
+                    file_type TEXT,
+                    total_pages INTEGER,
+                    total_chunks INTEGER,
+                    metadata JSONB,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # Ensure columns exist (idempotent patch)
+            columns = [
+                ("filename", "TEXT"), 
+                ("file_type", "TEXT"), 
+                ("total_pages", "INTEGER"), 
+                ("total_chunks", "INTEGER"),
+                ("metadata", "JSONB"), 
+                ("status", "TEXT")
+            ]
+            for col, type_ in columns:
+                await cur.execute(f"ALTER TABLE documents ADD COLUMN IF NOT EXISTS {col} {type_}")
+
+            # Create chunks table
+            # Check if vector extension is working by using vector type
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS chunks (
+                    id SERIAL PRIMARY KEY,
+                    content TEXT,
+                    embedding vector(384),
+                    search_vector tsvector,
+                    metadata JSONB,
+                    chunk_type TEXT,
+                    token_count INTEGER,
+                    document_id TEXT REFERENCES documents(id) ON DELETE CASCADE
+                )
+            """)
+            
+            # Create indices
+            try:
+                await cur.execute("""
+                    CREATE INDEX IF NOT EXISTS chunks_embedding_idx ON chunks 
+                    USING ivfflat (embedding vector_cosine_ops)
+                    WITH (lists = 100)
+                """)
+            except Exception as e:
+                logger.warning(f"Note: Vector index creation might differ on empty table: {e}")
+
+            await cur.execute("CREATE INDEX IF NOT EXISTS chunks_search_idx ON chunks USING GIN (search_vector)")
+            await self.db_conn.commit()
+
     async def close(self) -> None:
         """Clean up connections."""
         if self.redis_client:

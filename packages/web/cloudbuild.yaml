@@ -7,6 +7,10 @@ steps:
       - 'asia-south1-docker.pkg.dev/$PROJECT_ID/sentinal-repo/sentinal-web:$BUILD_ID'
       - '-f'
       - 'packages/web/Dockerfile'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_API_URL=https://sentinal-api-711220270423.asia-south1.run.app'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_WORKER_URL=https://sentinal-worker-711220270423.asia-south1.run.app'
       - '.'
   
   # Push the container image to Artifact Registry
@@ -36,7 +40,7 @@ steps:
       - '--min-instances'
       - '0'
       - '--set-env-vars'
-      - 'NODE_ENV=production,NEXT_PUBLIC_API_URL=https://sentinal-api-711220270423.asia-south1.run.app'
+      - 'NODE_ENV=production,NEXT_PUBLIC_API_URL=https://sentinal-api-711220270423.asia-south1.run.app,NEXT_PUBLIC_WORKER_URL=https://sentinal-worker-711220270423.asia-south1.run.app'
 
 images:
   - 'asia-south1-docker.pkg.dev/$PROJECT_ID/sentinal-repo/sentinal-web:$BUILD_ID'
