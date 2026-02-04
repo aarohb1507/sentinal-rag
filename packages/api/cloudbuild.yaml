@@ -40,7 +40,7 @@ steps:
       - '--add-cloudsql-instances'
       - '$PROJECT_ID:asia-south1:sentinal-postgres'
       - '--set-env-vars'
-      - 'NODE_ENV=production,DB_HOST=/cloudsql/$PROJECT_ID:asia-south1:sentinal-postgres,DB_PORT=5432,DB_NAME=sentinelrag,DB_USER=sentinal_user,REDIS_HOST=10.34.136.227,REDIS_PORT=6379,WORKER_URL=https://sentinal-worker-711220270423.asia-south1.run.app,CORS_ORIGINS=https://sentinal-web-711220270423.asia-south1.run.app,http://localhost:3001'
+      - 'NODE_ENV=production,DB_HOST=/cloudsql/$PROJECT_ID:asia-south1:sentinal-postgres,DB_PORT=5432,DB_NAME=sentinelrag,DB_USER=sentinal_user,REDIS_HOST=10.34.136.227,REDIS_PORT=6379,WORKER_URL=https://sentinal-worker-711220270423.asia-south1.run.app,CORS_ORIGINS=https://sentinal-web-711220270423.asia-south1.run.app^http://localhost:3001'
       - '--set-secrets'
       - 'DB_PASSWORD=db-password:latest,GROQ_API_KEY=groq-api-key:latest'
 
