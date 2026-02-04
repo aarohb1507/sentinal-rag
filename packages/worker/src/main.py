@@ -110,6 +110,75 @@ async def health_check():
     )
 
 
+@app.post("/admin/reset-schema")
+async def reset_schema():
+    """
+    ADMIN ONLY: Drop and recreate database tables.
+    WARNING: This deletes all data!
+    """
+    if not pipeline or not pipeline.db_conn:
+        raise HTTPException(status_code=503, detail="Pipeline not initialized")
+    
+    try:
+        async with pipeline.db_conn.cursor() as cur:
+            # Drop existing tables
+            await cur.execute("DROP TABLE IF EXISTS chunks CASCADE")
+            await cur.execute("DROP TABLE IF EXISTS documents CASCADE")
+            logger.info("Dropped existing tables")
+            
+            # Recreate with correct schema
+            await cur.execute("""
+                CREATE TABLE documents (
+                    id TEXT PRIMARY KEY,
+                    filename TEXT,
+                    file_type TEXT,
+                    total_pages INTEGER,
+                    total_chunks INTEGER,
+                    metadata JSONB,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            logger.info("Created documents table")
+            
+            await cur.execute("""
+                CREATE TABLE chunks (
+                    id SERIAL PRIMARY KEY,
+                    content TEXT,
+                    embedding vector(384),
+                    search_vector tsvector,
+                    metadata JSONB,
+                    chunk_type TEXT,
+                    token_count INTEGER,
+                    document_id TEXT REFERENCES documents(id) ON DELETE CASCADE
+                )
+            """)
+            logger.info("Created chunks table")
+            
+            # Create indices
+            await cur.execute("""
+                CREATE INDEX chunks_embedding_idx ON chunks 
+                USING ivfflat (embedding vector_cosine_ops)
+                WITH (lists = 100)
+            """)
+            await cur.execute("CREATE INDEX chunks_search_idx ON chunks USING GIN (search_vector)")
+            await cur.execute("CREATE INDEX chunks_document_id_idx ON chunks (document_id)")
+            await cur.execute("CREATE INDEX documents_status_idx ON documents (status)")
+            logger.info("Created indices")
+            
+            await pipeline.db_conn.commit()
+        
+        return {
+            "status": "success",
+            "message": "Schema reset complete",
+            "tables_created": ["documents", "chunks"]
+        }
+    except Exception as e:
+        logger.error(f"Schema reset failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ==================== Document Management Endpoints ====================
 
 @app.get("/documents")

@@ -1,5 +1,10 @@
--- Initialize PostgreSQL with pgvector extension
--- and create SentinelRAG schema
+-- Reset database schema by dropping and recreating tables
+-- This fixes the schema mismatch between init SQL and application code
+
+-- Drop existing tables (CASCADE removes foreign key dependencies)
+DROP TABLE IF EXISTS chunks CASCADE;
+DROP TABLE IF EXISTS documents CASCADE;
+DROP TABLE IF EXISTS evaluation_runs CASCADE;
 
 -- Enable pgvector extension
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -80,7 +85,7 @@ CREATE TABLE IF NOT EXISTS evaluation_runs (
     chunks_reranked INTEGER,
     chunks_used INTEGER,
     latency_violations JSONB,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS evaluation_runs_request_id_idx 
@@ -104,19 +109,3 @@ CREATE TRIGGER update_chunks_updated_at BEFORE UPDATE ON chunks
 
 CREATE TRIGGER update_documents_updated_at BEFORE UPDATE ON documents
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Insert sample data for testing (optional)
--- Uncomment to populate with sample chunks
-
-/*
-INSERT INTO documents (title, content, metadata) VALUES
-('Sample Document', 'This is a sample document for testing SentinelRAG.', '{"source": "test", "type": "sample"}');
-*/
-
--- Verification
-DO $$
-BEGIN
-    RAISE NOTICE 'SentinelRAG schema initialized successfully';
-    RAISE NOTICE 'Tables created: chunks, documents, evaluation_runs';
-    RAISE NOTICE 'Indices created: vector (ivfflat), keyword (GIN), metadata';
-END $$;
