@@ -24,19 +24,19 @@ FROM node:20-alpine
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=3001
+# Cloud Run sets PORT=8080 by default, respect it
+ENV PORT=8080
 
 # Copy production dependencies lock file and config
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY packages/web/package.json ./packages/web/
 COPY --from=builder /app/packages/web/.next ./packages/web/.next
 COPY --from=builder /app/packages/web/next.config.js ./packages/web/
-COPY --from=builder /app/packages/web/public ./packages/web/public 2>/dev/null || true
 
 # Install production dependencies
 RUN npm install -g pnpm@9
 RUN pnpm install --prod --frozen-lockfile
 
-EXPOSE 3001
+EXPOSE 8080
 
 CMD ["pnpm", "--filter", "@sentinal-rag/web", "start"]

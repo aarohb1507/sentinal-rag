@@ -37,6 +37,7 @@ steps:
       - '0'
       - '--timeout'
       - '900'
+      - '--cpu-boost'
       - '--vpc-connector'
       - 'projects/$PROJECT_ID/locations/asia-south1/connectors/sentinal-connector'
       - '--add-cloudsql-instances'

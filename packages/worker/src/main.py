@@ -45,13 +45,23 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Configure CORS origins based on environment
+cors_origins = [
+    "http://localhost:3001",  # Web UI (dev)
+    "http://localhost:3000",  # API (dev)
+]
+
+# Add Cloud Run origins in production
+if worker_config.env == "production":
+    cors_origins.extend([
+        "https://sentinal-api-711220270423.asia-south1.run.app",
+        "https://sentinal-web-711220270423.asia-south1.run.app",
+    ])
+
 # Add CORS middleware to allow requests from Web UI
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3001",  # Web UI
-        "http://localhost:3000",  # API (if needed)
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

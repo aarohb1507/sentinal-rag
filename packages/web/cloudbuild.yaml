@@ -35,10 +35,8 @@ steps:
       - '5'
       - '--min-instances'
       - '0'
-      - '--port'
-      - '3001'
       - '--set-env-vars'
-      - 'NODE_ENV=production'
+      - 'NODE_ENV=production,NEXT_PUBLIC_API_URL=https://sentinal-api-711220270423.asia-south1.run.app'
 
 images:
   - 'asia-south1-docker.pkg.dev/$PROJECT_ID/sentinal-repo/sentinal-web:$BUILD_ID'
