@@ -18,7 +18,9 @@ import { logger } from '../utils/logger';
 export interface RetrievalResult {
   chunkId: string;
   content: string;
-  score: number;
+  score: number;                    // Combined/max score (for backward compatibility)
+  vectorScore: number;              // Vector similarity score (0-1)
+  keywordScore: number;             // Keyword relevance score (0-1)
   metadata: Record<string, any>;
   source: 'keyword' | 'vector' | 'hybrid';
   relevanceScore?: number;
@@ -111,6 +113,8 @@ async function keywordSearch(
     chunkId: row.chunk_id,
     content: row.content,
     score: parseFloat(row.score),
+    vectorScore: 0,                        // No vector score for keyword-only results
+    keywordScore: parseFloat(row.score),   // PostgreSQL ts_rank_cd score
     metadata: row.metadata || {},
     source: 'keyword' as const,
   }));
@@ -162,6 +166,8 @@ async function vectorSearch(
     chunkId: row.chunk_id,
     content: row.content,
     score: parseFloat(row.score),
+    vectorScore: parseFloat(row.score),    // pgvector cosine similarity (1 - distance)
+    keywordScore: 0,                       // No keyword score for vector-only results
     metadata: row.metadata || {},
     source: 'vector' as const,
   }));
@@ -181,17 +187,21 @@ function mergeResults(
 ): RetrievalResult[] {
   const merged = new Map<string, RetrievalResult>();
 
+  // Add keyword results first
   for (const result of keywordResults) {
     merged.set(result.chunkId, result);
   }
 
+  // Merge vector results, preserving BOTH scores
   for (const result of vectorResults) {
     const existing = merged.get(result.chunkId);
     if (existing) {
-      // Chunk appears in both - take max score and mark as hybrid
+      // Chunk appears in both - KEEP BOTH SCORES
       merged.set(result.chunkId, {
         ...result,
-        score: Math.max(existing.score, result.score),
+        score: Math.max(existing.score, result.score),  // Max for sorting
+        vectorScore: result.vectorScore,                 // Keep vector score
+        keywordScore: existing.keywordScore,             // Keep keyword score
         source: 'hybrid',
       });
     } else {

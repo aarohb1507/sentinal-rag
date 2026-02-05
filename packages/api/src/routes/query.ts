@@ -86,7 +86,7 @@ export const queryRoutes: FastifyPluginAsync = async (fastify) => {
       const rerankerStartTime = Date.now();
       let rerankedChunks;
       try {
-        rerankedChunks = await rerankChunks(query, retrievedChunks);
+        rerankedChunks = await rerankChunks(query, retrievedChunks, options?.topK, queryEmbedding);
       } catch (error) {
         fastify.log.error({ requestId, error }, 'Reranking failed');
         // Degrade gracefully: use top 6 from retrieval if reranking fails
