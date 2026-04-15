@@ -43,8 +43,17 @@ export const queryRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const { query, options } = validation.data;
+      const includeDebug = options?.includeDebug === true;
 
-      fastify.log.info({ requestId, query }, 'Processing query');
+      fastify.log.info(
+        {
+          requestId,
+          queryLength: query.length,
+          includeDebug,
+          hasDocumentFilter: Boolean(options?.documentId),
+        },
+        'Processing query'
+      );
 
       // ===== STAGE 1: EMBEDDING =====
       const embeddingStartTime = Date.now();
@@ -143,14 +152,14 @@ export const queryRoutes: FastifyPluginAsync = async (fastify) => {
       // Build full source objects with content, score, metadata
       const sources = rerankedChunks.map((chunk) => ({
         chunkId: chunk.chunkId,
-        content: chunk.content,
+        content: includeDebug ? chunk.content : undefined,
         score: chunk.relevanceScore ?? 0,
-        metadata: chunk.metadata || {},
+        metadata: includeDebug ? chunk.metadata || {} : undefined,
       }));
       
       const response = {
         requestId,
-        query,
+        query: includeDebug ? query : undefined,
         answer: synthesisResult.answer,
         sources,
         refusalReason: synthesisResult.refusalReason || undefined,

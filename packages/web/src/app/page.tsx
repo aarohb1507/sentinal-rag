@@ -15,13 +15,13 @@ interface Document {
 
 interface QueryResponse {
   requestId: string;
-  query: string;
+  query?: string;
   answer: string;
   sources: Array<{
     chunkId: string;
-    content: string;
+    content?: string;
     score: number;
-    metadata: Record<string, any>;
+    metadata?: Record<string, any>;
   }>;
   metadata: {
     latency: {
@@ -42,6 +42,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 export default function Home() {
   const [query, setQuery] = useState('');
+  const [showSources, setShowSources] = useState(false);
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState<QueryResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,7 +93,7 @@ export default function Home() {
         body: JSON.stringify({
           query,
           options: {
-            includeDebug: true,
+            includeDebug: showSources,
             documentId: selectedDocumentId || undefined, // Filter by selected document
           },
         }),
@@ -109,6 +110,14 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatMetadataValue = (value: unknown) => {
+    if (value === null || value === undefined) return 'n/a';
+    if (typeof value === 'string') return value.length > 64 ? `${value.slice(0, 64)}…` : value;
+    if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+    const serialized = JSON.stringify(value);
+    return serialized.length > 64 ? `${serialized.slice(0, 64)}…` : serialized;
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -195,15 +204,15 @@ export default function Home() {
       <div className={styles.container}>
         <header className={styles.header}>
           <h1>SentinelRAG</h1>
-          <p>Production-grade RAG with inspectable retrieval</p>
+          <p>Search across your uploaded documents with transparent, controllable retrieval.</p>
         </header>
 
         {/* PDF Upload Section */}
         <section className={styles.uploadSection}>
-          <h2>📄 Upload PDF Document</h2>
+          <h2>Upload document</h2>
           <div className={styles.uploadContainer}>
             <label htmlFor="pdf-upload" className={styles.uploadButton}>
-              {uploadLoading ? 'Uploading...' : 'Choose PDF File'}
+              {uploadLoading ? 'Uploading...' : 'Choose PDF'}
             </label>
             <input
               id="pdf-upload"
@@ -224,7 +233,7 @@ export default function Home() {
 
         {/* Documents List Section */}
         <section className={styles.documentsSection}>
-          <h2>📚 Your Documents</h2>
+          <h2>Your documents</h2>
           {documentsLoading ? (
             <p className={styles.documentsLoading}>Loading documents...</p>
           ) : documents.length === 0 ? (
@@ -261,15 +270,15 @@ export default function Home() {
                       disabled={deleteLoading === doc.id}
                       title="Delete document"
                     >
-                      {deleteLoading === doc.id ? '...' : '🗑️'}
+                      {deleteLoading === doc.id ? 'Deleting...' : 'Delete'}
                     </button>
                   </div>
                 ))}
               </div>
               <p className={styles.contextHint}>
                 {selectedDocumentId 
-                  ? `🔍 Searching in: "${documents.find(d => d.id === selectedDocumentId)?.filename}"`
-                  : '🔍 Searching in: All documents'}
+                  ? `Scope: ${documents.find(d => d.id === selectedDocumentId)?.filename}`
+                  : 'Scope: all documents'}
               </p>
             </>
           )}
@@ -285,6 +294,15 @@ export default function Home() {
             className={styles.input}
             disabled={loading}
           />
+          <label className={styles.debugToggle}>
+            <input
+              type="checkbox"
+              checked={showSources}
+              onChange={(e) => setShowSources(e.target.checked)}
+              disabled={loading}
+            />
+            <span>Include source excerpts</span>
+          </label>
           <button type="submit" disabled={loading} className={styles.button}>
             {loading ? 'Searching...' : 'Search'}
           </button>
@@ -340,23 +358,25 @@ export default function Home() {
               </div>
             </section>
 
-            {response.sources.length > 0 && (
+            {showSources && response.sources?.length > 0 && (
               <section className={styles.sources}>
-                <h2>Source Chunks ({response.sources.length})</h2>
+                <h2>Source chunks ({response.sources.length})</h2>
                 {response.sources.map((source, idx) => (
                   <div key={source.chunkId} className={styles.source}>
                     <div className={styles.sourceHeader}>
                       <span className={styles.sourceRank}>#{idx + 1}</span>
                       <span className={styles.sourceScore}>Score: {source.score.toFixed(3)}</span>
                     </div>
-                    <p className={styles.sourceContent}>{source.content}</p>
-                    <div className={styles.sourceMetadata}>
-                      {Object.entries(source.metadata).map(([key, value]) => (
-                        <span key={key} className={styles.metadataTag}>
-                          {key}: {JSON.stringify(value)}
-                        </span>
-                      ))}
-                    </div>
+                    {source.content && <p className={styles.sourceContent}>{source.content}</p>}
+                    {!!source.metadata && (
+                      <div className={styles.sourceMetadata}>
+                        {Object.entries(source.metadata).slice(0, 6).map(([key, value]) => (
+                          <span key={key} className={styles.metadataTag}>
+                            {key}: {formatMetadataValue(value)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </section>

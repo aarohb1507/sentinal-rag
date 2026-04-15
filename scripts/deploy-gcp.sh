@@ -3,7 +3,7 @@
 # GCP Deployment Script for Sentinal RAG
 # This script sets up all infrastructure on Google Cloud Platform
 
-set -e
+set -euo pipefail
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -96,7 +96,12 @@ echo -e "${GREEN}Redis host: $REDIS_HOST${NC}\n"
 echo -e "${BLUE}Step 4: Storing secrets in Secret Manager...${NC}"
 
 # OpenAI API Key
-read -p "Enter your OpenAI API Key: " OPENAI_KEY
+read -r -s -p "Enter your OpenAI API Key: " OPENAI_KEY
+echo
+if [ -z "$OPENAI_KEY" ]; then
+    echo -e "${YELLOW}OpenAI API key is required${NC}"
+    exit 1
+fi
 echo -n "$OPENAI_KEY" | gcloud secrets create openai-api-key --data-file=- --replication-policy="automatic" || \
     echo -n "$OPENAI_KEY" | gcloud secrets versions add openai-api-key --data-file=-
 
@@ -108,6 +113,9 @@ echo -n "$DB_PASSWORD" | gcloud secrets create db-password --data-file=- --repli
 JWT_SECRET=$(openssl rand -base64 32)
 echo -n "$JWT_SECRET" | gcloud secrets create jwt-secret --data-file=- --replication-policy="automatic" || \
     echo -n "$JWT_SECRET" | gcloud secrets versions add jwt-secret --data-file=-
+
+unset OPENAI_KEY
+unset JWT_SECRET
 
 echo -e "${GREEN}✓ Secrets stored${NC}\n"
 
